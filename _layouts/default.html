@@ -20,7 +20,10 @@
     {% if page.title ==  "Blog"%}
     <link rel="stylesheet" href="/assets/css/post.css">
     {% endif %}
-    <!-- Custom styles for this template -->
+  <!-- Custom styles for this template -->
+  {% if site.google_analytics and jekyll.environment == 'production' %}
+  {% include analytics.html %}
+  {% endif %}
   </head>
   <body class="d-flex flex-column h-100">
   {% include navigation.html %}
