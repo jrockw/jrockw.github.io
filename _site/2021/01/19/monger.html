@@ -3,7 +3,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="">
  
-    <title>C - Blog</title>
+    <title>C - Monger</title>
     <!-- Bootstrap core CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
     <!--Google fonts -->
@@ -14,9 +14,9 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="/assets/css/styles.css">
     
-
-    
     <link rel="stylesheet" href="/assets/css/post.css">
+    
+
     
     <!-- Custom styles for this template -->
   </head>
@@ -31,8 +31,8 @@
     <div class="collapse navbar-collapse" id="navbarCollapse"> 
       <ul class="navbar-nav mr-auto"> 
 	
-	<li class="nav-item active"> 
-		<a class="nav-link" href="/blog.html">Blog <span class="sr-only">(current)</span></a> 
+	<li class="nav-item "> 
+		<a class="nav-link" href="/blog.html">Blog </a> 
         </li> 
 	
 	<li class="nav-item "> 
@@ -45,59 +45,30 @@
 </header>
 
 <h2> </h2>
-<h1 style="padding: 1rem; color: white;">Latest Posts</h1>
-
-<ul>
-  
-  <div class="px-md-3 mt-3 mr-3">
-    <div class="card">
-      <div class="card-body">
-      <li>
-        <h2><a href="/2021/01/19/monger.html">Monger</a></h2>
+<div class="container">
+  <div class="card">
+    <div class="card-body">
+      <article>
+        <h1 style="color: #444444">Monger</h1>
+        <p style="color: #666666">19 Jan 2021 - Jacob</p>
         <p>During the long months of quarentine, I cofounded, led, designed, and built Monger.la, LLC, a food delivery service with an ecommerce platform and an order management system. Restauraunts had been shut down in California’s first lockdown and the wholesale food system was struggling. Distributors began selling directly to consumers via email. I saw a market for an ecommerce platform for these distributors, the status quo was sloppy and inefficient. I partnerned with a team and got to work. I was in charge of creating the platform, and I began by meeting with distributors and learning about their efficiencies and bottlenecks. I realized that efficient routing of delivery trucks had been a big problem for most of these distributors that had been used to driving to the same restraurants week after week. I noted that processing payment and communication with customers took at least one person working full time. Orders were assembled in a very specific way, and the pace was fast.</p>
 
-      </li>
-      </div>
-    </div>
-  </div>
-  
-  <div class="px-md-3 mt-3 mr-3">
-    <div class="card">
-      <div class="card-body">
-      <li>
-        <h2><a href="/2021/01/19/banned.html">Banned</a></h2>
-        <p>The terrible sting of being told to sit out of middle school class because I talked too much is an all too familiar feeling. Now, instead of roudy preteens like me, platforms and pop icons are the ones sent to the hallway. The recent wave of bans and deplatforms ranging from presidents to podcasts demonstrates a cultural shift years in the making.</p>
+<p>With all these observations in mind, I began designing the platform and order management system. I used django-oscar, an ecommerce plugin for Django and customized order flow, inventory management, checkout flow, payment processing, and many more aspects. I brought on a front end developer, who I managed. Managing someone else was an incredibly challanging and rewarding experience. I noticed I needed to be explicit about what I wanted built and I needed to track our progress as the todo list became unwieldy. I used Jira to set up a Kanban board, and prioritized our tasks. I really liked the distributed way I was able to order the tasks, and the focus on achieving a minimum viable product.</p>
 
-      </li>
-      </div>
-    </div>
-  </div>
-  
-  <div class="px-md-3 mt-3 mr-3">
-    <div class="card">
-      <div class="card-body">
-      <li>
-        <h2><a href="/2020/07/24/instanet.html">Instanet</a></h2>
-        <p>An experiment into scraping instagram to build a facial recognition network trained across everyone’s instagram pages that I follow.</p>
+<p>As I met with graphic designers, distributors, and business partners, I had to learn to balance competing desires from growing feature requests, to testing the platform, while keeping to a fast paced timeline. Lots of this project required learning entirely new areas of software development, from database management, to AWS hosting and security, to web app production.</p>
 
-      </li>
-      </div>
-    </div>
-  </div>
-  
-  <div class="px-md-3 mt-3 mr-3">
-    <div class="card">
-      <div class="card-body">
-      <li>
-        <h2><a href="/2020/05/14/scouter.html">Scouter</a></h2>
-        <p>Scouter is an app to help people navigate the confusing and chaotic world of e-scooters and e-bikes. I got the idea for this app from a friend of mine, Adam, who used e-scooters as his primary way to get to work everyday.</p>
+<p>I enjoyed creating fixes to problems that distributors spent 30+ hrs/week on. Talking with one distributor, I found that he spent ~1 hour a day plotting delivery routes for his drivers on google maps. I recalled the traveling salesman problem from a Discrete Math course I took, and wrote a program that would find an optimal solution, given average traffic times, distance, distribution point, and time contraints. I was able to integrate this program with django so that when we were ready to submit an order sheet to a distributor, a delivery route would be automatically generated.</p>
 
-      </li>
-      </div>
+<p>As we entered the Alpha phase of testing, the importance of creating a fully tested platform became apparent. I found bugs where I didn’t know they could have existed. I had to review the frontend developer’s work, and decided that a style guide would be beneficial. I knew that I would be going back to school where I wouldn’t be able to continue to work on the project, so I took the opportunity to create a wiki as well with documentation for the platform. Once enough bugs were fixed, we moved to a beta phase.</p>
+
+<p>In the beta phase we began to place orders with distributors, using a small group of friends and family as customers. The little things, like creating a “Forgot password” or site map rose out of the barrage of testers. At this point, I had to go back to school. I had essentialy taken a semester off already, and intend on graduating in a semi-timely manner. I negotiated a sale of my position and the product I’d made to my partners, and drove out to Ann Arbor.</p>
+
+<p>During this three month long sprint, I’d learned a lot about myself as a developer. I found that I really liked managing projects, and floating from issue to issue. Creating a product was an entirely different experience than a side project or school assignment. I enjoyed the fast pace required and the real world impact, being able to manage and design customer informed products.</p>
+
+      </article>
     </div>
   </div>
-  
-</ul>
+</div>
 
 
 <footer class="footer mt-auto py-3">

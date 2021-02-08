@@ -51,7 +51,13 @@
       <article>
         <h1 style="color: #444444">Instanet</h1>
         <p style="color: #666666">24 Jul 2020 - jacob</p>
-        <p>An experiment into scraping instagram to build a facial recognition network trained across everyone’s instagram pages that I follow. There were two main challanges: low shot recognition and identifying the face of the owner of a given page. Low shot recognitoin was difficult because normally CNNs require vast amounts of data to train, most people only have a handfull of pictures on their instagram pages. I overcame this by using a Siamese Neural Network, a network that has been pre-trained on millions of faces and identifies the useful features in distinguishing a given face. When a face is fed into the network, the result is a vector of 128 useful features. The second major challenge was identifying the owner of a given page. People post photos of others, group photos, and memes. To determine which faces belonged to the owner of the page, I used a clustering algorithm to find which faces in someone’s profile appeared the most frequently. Then these vectors of people’s facial features were added to a database I used to later identify them from the wild.</p>
+        <p>An experiment into scraping instagram to build a facial recognition network trained across everyone’s instagram pages that I follow.</p>
+
+<p>There were two main challanges: low shot recognition and identifying the face of the owner of a given page. Low shot recognitoin was difficult because normally CNNs require vast amounts of data to train, most people only have a handfull of pictures on their instagram pages. I overcame this by using a feature detection netowrk, a model that has been pre-trained on millions of faces and identifies the relevant features in distinguishing a given face. When a face is fed into the network, the resulting features are compared with others to find the most similar match. The second major challenge was identifying the owner of a given page. People post photos of others, group photos, and memes. To determine which faces belonged to the owner of the page, I used a clustering algorithm to find which faces in someone’s profile appeared the most frequently. Then these vectors of people’s facial features were added to a database I used to later identify them from the wild.</p>
+
+<p>Here’s an example of the first step of the InstaNet pipeline, face parsing:</p>
+
+<p><img src="/assets/images/kristen.png" alt="Kristen and the girls" class="kristen" /></p>
 
       </article>
     </div>
