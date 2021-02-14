@@ -18,6 +18,11 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <!-- Custom styles for this template -->
     <link href="/assets/css/styles.css" rel="stylesheet">
+  <!--Google analytics, ya digg?-->
+  {% if jekyll.environment == 'production' %}
+  {% include analytics.html %}
+  {% endif %}
+
   </head>
   <body class="d-flex flex-column h-100">
   {% include navigation.html %}
