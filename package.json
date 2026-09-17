@@ -1,0 +1,17 @@
+{
+  "name": "complexity-portfolio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "export ASTRO_TELEMETRY_DISABLED=1 && astro check && astro build",
+    "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview"
+  },
+  "dependencies": {
+    "@astrojs/check": "latest",
+    "@types/three": "latest",
+    "astro": "latest",
+    "three": "latest",
+    "typescript": "latest"
+  }
+}

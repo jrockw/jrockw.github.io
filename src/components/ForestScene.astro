@@ -1,0 +1,428 @@
+<div class="forest-scene" data-forest-scene>
+  <canvas data-forest-canvas tabindex="0" role="img" aria-keyshortcuts="W A S D ArrowUp ArrowLeft ArrowDown ArrowRight Home" aria-label="A three-dimensional wireframe pine forest with grass, bushes, and a little mouse exploring a winding trail. Move the pointer to look around, or focus the scene and use WASD or the arrow keys. Home resets the view."></canvas>
+  <p class="forest-loading" data-forest-loading role="status">Preparing the forest…</p>
+  <div class="forest-controls shell">
+    <span class="forest-hint">Move to look around · Click the scene for WASD or arrow keys · Home to reset</span>
+  </div>
+</div>
+
+<script>
+  import * as THREE from 'three';
+  import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+  import { getMouseMotion } from '../lib/forest-motion';
+
+  const host = document.querySelector<HTMLElement>('[data-forest-scene]');
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-forest-canvas]');
+
+  if (host && canvas) {
+    const setupForest = () => {
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+      renderer.setClearColor(0x000000, 0);
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(52, 1, 0.2, 280);
+      const geometries = new Set<THREE.BufferGeometry>();
+      const remember = <T extends THREE.BufferGeometry>(geometry: T): T => {
+        geometries.add(geometry);
+        return geometry;
+      };
+
+      // Seeded placement keeps the same forest when changing themes or pages.
+      let seed = 48;
+      const random = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 4294967296;
+      };
+      const trailCenter = (z: number) => 7 + Math.sin(z * 0.036) * 6 + Math.sin(z * 0.085) * 2;
+      const groundHeight = (x: number, z: number) => {
+        const fromTrail = Math.abs(x - trailCenter(z));
+        const slope = THREE.MathUtils.smoothstep(fromTrail, 3, 30);
+        const hills = 2.6 + Math.sin(x * 0.082 + z * 0.033) * 2.1 + Math.cos(z * 0.067) * 1.3;
+        const detail = Math.sin(x * 0.25 + z * 0.11) * 0.35 + Math.cos(x * 0.14 - z * 0.24) * 0.2;
+        const mountains = THREE.MathUtils.smoothstep(-z, 105, 210) * (14 + Math.sin(x * 0.06) * 9 + Math.cos(x * 0.11 + z * 0.038) * 6);
+        return Math.sin(z * 0.045) * 0.65 + (hills + detail) * slope + mountains;
+      };
+
+      const groundMaterial = new THREE.MeshBasicMaterial({ polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+      const terrainWireMaterial = new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.24, depthWrite: false });
+      const treeMaterial = new THREE.MeshBasicMaterial({ polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+      const treeWireMaterial = new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.62, depthWrite: false });
+      const trailMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false });
+      const starsMaterial = new THREE.PointsMaterial({ color: 0xc5daff, size: 1.4, sizeAttenuation: false, transparent: true, opacity: 0.65, depthWrite: false, fog: false });
+      const grassMaterial = new THREE.MeshBasicMaterial({ wireframe: true, side: THREE.DoubleSide, transparent: true, opacity: 0.55, depthWrite: false });
+      const mouseWireMaterial = new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.9, depthWrite: false });
+      const mouseDetailMaterial = new THREE.MeshBasicMaterial();
+      const tailMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false });
+      const materials = [groundMaterial, terrainWireMaterial, treeMaterial, treeWireMaterial, trailMaterial, starsMaterial, grassMaterial, mouseWireMaterial, mouseDetailMaterial, tailMaterial];
+
+      const terrain = remember(new THREE.PlaneGeometry(200, 250, 95, 125));
+      terrain.rotateX(-Math.PI / 2);
+      terrain.translate(0, 0, -90);
+      const position = terrain.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < position.count; i++) position.setY(i, groundHeight(position.getX(i), position.getZ(i)));
+      terrain.computeBoundingSphere();
+      scene.add(new THREE.Mesh(terrain, groundMaterial));
+      const terrainWire = new THREE.Mesh(terrain, terrainWireMaterial);
+      terrainWire.renderOrder = 1;
+      scene.add(terrainWire);
+
+      // A fourth tier and slightly uneven branch tips keep the low-poly silhouette.
+      const crown = (radius: number, height: number, y: number, turn: number) => {
+        const geometry = new THREE.ConeGeometry(radius, height, 9, 3);
+        const vertices = geometry.getAttribute('position');
+        for (let i = 0; i < vertices.count; i++) {
+          const x = vertices.getX(i);
+          const z = vertices.getZ(i);
+          const angle = Math.atan2(z, x) + turn;
+          const edge = Math.hypot(x, z) / radius;
+          const ripple = 1 + edge * (Math.sin(angle * 3) * 0.045 + Math.cos(angle * 5) * 0.055);
+          vertices.setXYZ(i, x * ripple, vertices.getY(i) + Math.sin(angle * 4) * edge * 0.12, z * ripple);
+        }
+        return geometry.rotateY(turn).translate(0, y, 0);
+      };
+      const pineParts = [
+        new THREE.CylinderGeometry(0.13, 0.3, 4.2, 7, 2).translate(0, 2.1, 0),
+        crown(2.6, 4.8, 3.9, 0),
+        crown(2.15, 4.6, 5.8, 0.35),
+        crown(1.6, 4.1, 7.6, 0.1),
+        crown(0.95, 3.5, 9.3, 0.5)
+      ];
+      const pineGeometry = remember(mergeGeometries(pineParts));
+      pineParts.forEach(part => part.dispose());
+      const treePositions: { x: number; z: number; scale: number; width: number; angle: number }[] = [];
+      for (let row = 0; row < 15; row++) {
+        for (let col = 0; col < 13; col++) {
+          const x = -70 + col * 11 + (random() - 0.5) * 6;
+          const z = 13 - row * 10 + (random() - 0.5) * 6;
+          if (Math.abs(x - trailCenter(z)) < 6 || random() < 0.14) continue;
+          treePositions.push({ x, z, scale: 0.62 + random() * 0.66, width: 0.7 + random() * 0.42, angle: random() * Math.PI * 2 });
+        }
+      }
+      const trunks = new THREE.InstancedMesh(pineGeometry, treeMaterial, treePositions.length);
+      const branches = new THREE.InstancedMesh(pineGeometry, treeWireMaterial, treePositions.length);
+      branches.renderOrder = 2;
+      const transform = new THREE.Object3D();
+      treePositions.forEach((tree, i) => {
+        transform.position.set(tree.x, groundHeight(tree.x, tree.z) - 0.08, tree.z);
+        transform.rotation.set(0, tree.angle, 0);
+        transform.scale.set(tree.scale * tree.width, tree.scale, tree.scale * tree.width);
+        transform.updateMatrix();
+        trunks.setMatrixAt(i, transform.matrix);
+        branches.setMatrixAt(i, transform.matrix);
+      });
+      trunks.computeBoundingSphere();
+      branches.computeBoundingSphere();
+      scene.add(trunks, branches);
+
+      // Share geometry across the undergrowth to keep the scene inexpensive.
+      const grassVertices: number[] = [];
+      for (let blade = 0; blade < 7; blade++) {
+        const angle = blade * 2.4;
+        const height = 0.5 + random() * 0.6;
+        const x = Math.cos(angle) * 0.14;
+        const z = Math.sin(angle) * 0.14;
+        const tipX = x + Math.cos(angle) * 0.4;
+        const tipZ = z + Math.sin(angle) * 0.4;
+        grassVertices.push(x - 0.035, 0, z, x + 0.035, 0, z, tipX, height, tipZ);
+      }
+      const grassGeometry = remember(new THREE.BufferGeometry());
+      grassGeometry.setAttribute('position', new THREE.Float32BufferAttribute(grassVertices, 3));
+      const grass = new THREE.InstancedMesh(grassGeometry, grassMaterial, 84);
+      grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      grass.renderOrder = 2;
+      const grassPlacements: { x: number; y: number; z: number; angle: number; scale: number }[] = [];
+      for (let i = 0; i < grass.count; i++) {
+        const z = 13 - random() * 105;
+        const x = trailCenter(z) + (i % 2 ? -1 : 1) * (3.5 + random() * 10);
+        grassPlacements.push({ x, y: groundHeight(x, z) + 0.03, z, angle: random() * Math.PI * 2, scale: 0.6 + random() * 0.7 });
+      }
+      const animateGrass = (time: number) => {
+        grassPlacements.forEach((tuft, i) => {
+          // Slightly different phases keep the breeze from moving every tuft in unison.
+          const breeze = Math.sin(time * 1.1 + tuft.x * 0.3 + tuft.z * 0.12);
+          const flutter = Math.sin(time * 1.7 + i * 0.43);
+          transform.position.set(tuft.x, tuft.y, tuft.z);
+          transform.rotation.set(breeze * 0.045, tuft.angle, breeze * 0.055 + flutter * 0.015);
+          transform.scale.setScalar(tuft.scale);
+          transform.updateMatrix();
+          grass.setMatrixAt(i, transform.matrix);
+        });
+        grass.instanceMatrix.needsUpdate = true;
+      };
+      animateGrass(0);
+      grass.computeBoundingSphere();
+      if (grass.boundingSphere) grass.boundingSphere.radius += 0.2;
+      scene.add(grass);
+
+      const bushParts = [
+        new THREE.IcosahedronGeometry(1, 1).scale(1.05, 0.75, 0.9).translate(0, 0.65, 0),
+        new THREE.IcosahedronGeometry(1, 0).scale(0.8, 0.65, 0.7).translate(-0.8, 0.48, 0.15),
+        new THREE.IcosahedronGeometry(1, 0).scale(0.7, 0.85, 0.75).translate(0.65, 0.55, -0.1)
+      ];
+      const bushGeometry = remember(mergeGeometries(bushParts));
+      bushParts.forEach(part => part.dispose());
+      const bushes = new THREE.InstancedMesh(bushGeometry, treeMaterial, 10);
+      const bushWire = new THREE.InstancedMesh(bushGeometry, treeWireMaterial, 10);
+      bushWire.renderOrder = 2;
+      for (let i = 0; i < bushes.count; i++) {
+        const z = 5 - i * 7 + random() * 3;
+        const x = trailCenter(z) + (i % 2 ? -1 : 1) * (7 + random() * 5);
+        transform.position.set(x, groundHeight(x, z), z);
+        transform.rotation.set(0, random() * Math.PI * 2, 0);
+        transform.scale.setScalar(0.7 + random() * 0.45);
+        transform.updateMatrix();
+        bushes.setMatrixAt(i, transform.matrix);
+        bushWire.setMatrixAt(i, transform.matrix);
+      }
+      bushes.computeBoundingSphere();
+      bushWire.computeBoundingSphere();
+      scene.add(bushes, bushWire);
+
+      const mouse = new THREE.Group();
+      const mouseBody = new THREE.Group();
+      mouse.add(mouseBody);
+      mouse.scale.setScalar(0.9);
+      scene.add(mouse);
+      const mousePart = (geometry: THREE.BufferGeometry, parent: THREE.Group = mouseBody) => {
+        remember(geometry);
+        const part = new THREE.Group();
+        part.add(new THREE.Mesh(geometry, treeMaterial));
+        const wire = new THREE.Mesh(geometry, mouseWireMaterial);
+        wire.renderOrder = 3;
+        part.add(wire);
+        parent.add(part);
+        return part;
+      };
+      mousePart(new THREE.SphereGeometry(1, 8, 5).scale(0.31, 0.29, 0.52).translate(0, 0.34, 0));
+      const head = mousePart(new THREE.SphereGeometry(1, 8, 5).scale(0.24, 0.22, 0.28));
+      head.position.set(0, 0.43, 0.44);
+      mousePart(new THREE.ConeGeometry(0.14, 0.35, 7).rotateX(Math.PI / 2).translate(0, -0.045, 0.29), head);
+      for (const side of [-1, 1]) {
+        mousePart(new THREE.SphereGeometry(1, 7, 4).scale(0.14, 0.19, 0.065).translate(side * 0.18, 0.23, -0.015), head);
+        const eye = new THREE.Mesh(remember(new THREE.SphereGeometry(0.035, 6, 4)), mouseDetailMaterial);
+        eye.position.set(side * 0.17, 0.075, 0.2);
+        head.add(eye);
+      }
+      const nose = new THREE.Mesh(remember(new THREE.SphereGeometry(0.045, 6, 4)), mouseDetailMaterial);
+      nose.position.set(0, -0.045, 0.46);
+      head.add(nose);
+      const whiskerPoints: number[] = [];
+      for (const side of [-1, 1]) {
+        for (let i = -1; i <= 1; i++) {
+          whiskerPoints.push(side * 0.075, -0.035, 0.32, side * 0.38, -0.025 + i * 0.045, 0.3 + i * 0.1);
+        }
+      }
+      const whiskerGeometry = remember(new THREE.BufferGeometry());
+      whiskerGeometry.setAttribute('position', new THREE.Float32BufferAttribute(whiskerPoints, 3));
+      const whiskers = new THREE.LineSegments(whiskerGeometry, tailMaterial);
+      whiskers.renderOrder = 3;
+      head.add(whiskers);
+      const paws: THREE.Group[] = [];
+      for (const side of [-1, 1]) {
+        for (const z of [-0.27, 0.32]) {
+          const paw = mousePart(new THREE.SphereGeometry(1, 6, 4).scale(0.08, 0.07, 0.16), mouse);
+          paw.position.set(side * 0.23, 0.075, z);
+          paws.push(paw);
+        }
+      }
+      const tailGeometry = remember(new THREE.BufferGeometry());
+      const tailVertices = new THREE.Float32BufferAttribute(new Float32Array(19 * 3), 3);
+      tailVertices.setUsage(THREE.DynamicDrawUsage);
+      tailGeometry.setAttribute('position', tailVertices);
+      const tail = new THREE.Line(tailGeometry, tailMaterial);
+      // The small tail changes shape each frame; its parent remains in view.
+      tail.frustumCulled = false;
+      tail.renderOrder = 3;
+      mouse.add(tail);
+      const mouseRoute = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(trailCenter(2) - 3.8, 0, 2),
+        new THREE.Vector3(trailCenter(0) - 1, 0, 0),
+        new THREE.Vector3(trailCenter(-2) + 3.8, 0, -2),
+        new THREE.Vector3(trailCenter(-7) + 4, 0, -7),
+        new THREE.Vector3(trailCenter(-6), 0, -6),
+        new THREE.Vector3(trailCenter(-4) - 3.5, 0, -4)
+      ], true, 'centripetal');
+      const mouseRouteLength = mouseRoute.getLength();
+      const mousePosition = new THREE.Vector3();
+      const mouseDirection = new THREE.Vector3();
+      const animateMouse = (time: number) => {
+        // Two little runs and sniffing pauses share the scene's reduced-motion clock.
+        const motion = getMouseMotion(time);
+        const distance = motion.laps * mouseRouteLength;
+        mouseRoute.getPointAt(motion.progress, mousePosition);
+        mouseRoute.getTangentAt(motion.progress, mouseDirection);
+        mouse.position.set(mousePosition.x, groundHeight(mousePosition.x, mousePosition.z) + 0.04, mousePosition.z);
+        mouse.rotation.y = Math.atan2(mouseDirection.x, mouseDirection.z);
+        const stride = Math.sin(distance * 11) * motion.pace;
+        mouseBody.position.y = Math.abs(stride) * 0.035;
+        head.rotation.y = Math.sin(time * 2.5) * 0.15 * (1 - motion.pace);
+        head.rotation.x = Math.sin(time * 3) * 0.07 * (1 - motion.pace);
+        paws.forEach((paw, i) => {
+          const step = stride * (i === 0 || i === 3 ? 1 : -1);
+          paw.rotation.x = step * 0.5;
+          paw.position.y = 0.075 + Math.max(0, step) * 0.07;
+        });
+        for (let i = 0; i < tailVertices.count; i++) {
+          const t = i / (tailVertices.count - 1);
+          tailVertices.setXYZ(i, Math.sin(t * 4 - time * 2 - distance * 1.5) * t * 0.17, 0.12 - t * 0.05, -0.43 - t * 1.1);
+        }
+        tailVertices.needsUpdate = true;
+      };
+
+      for (const side of [-1, 1]) {
+        const points: THREE.Vector3[] = [];
+        for (let i = 0; i <= 180; i++) {
+          const z = 32 - i * 1.15;
+          const x = trailCenter(z) + side * 2.7;
+          points.push(new THREE.Vector3(x, groundHeight(x, z) + 0.08, z));
+        }
+        const trail = new THREE.Line(remember(new THREE.BufferGeometry().setFromPoints(points)), trailMaterial);
+        trail.renderOrder = 1;
+        scene.add(trail);
+      }
+
+      const starPositions: number[] = [];
+      for (let i = 0; i < 160; i++) starPositions.push((random() - 0.5) * 330, 24 + random() * 100, -170 - random() * 40);
+      const starsGeometry = remember(new THREE.BufferGeometry());
+      starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+      const stars = new THREE.Points(starsGeometry, starsMaterial);
+      scene.add(stars);
+
+      let frame = 0;
+      let disposed = false;
+      let inView = true;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let motionReduced = reducedMotion.matches;
+      let elapsed = motionReduced ? 4 : 0;
+      let lastTime = performance.now();
+      const pointer = new THREE.Vector2();
+      const target = new THREE.Vector2();
+      const lookAt = new THREE.Vector3();
+      const hero = host.parentElement!;
+
+      const requestFrame = () => {
+        if (!frame && !disposed && inView && !document.hidden) frame = requestAnimationFrame(render);
+      };
+      const updateTheme = () => {
+        const colors = getComputedStyle(host);
+        const getColor = (name: string) => colors.getPropertyValue(name).trim();
+        scene.fog = new THREE.Fog(getColor('--ground'), 35, 150);
+        groundMaterial.color.set(getColor('--forest-ground'));
+        terrainWireMaterial.color.set(getColor('--forest-grid'));
+        treeMaterial.color.set(getColor('--ground'));
+        treeWireMaterial.color.set(getColor('--forest-wire'));
+        trailMaterial.color.set(getColor('--forest-path'));
+        grassMaterial.color.set(getColor('--forest-wire'));
+        mouseWireMaterial.color.set(getColor('--forest-animal'));
+        mouseDetailMaterial.color.set(getColor('--forest-animal'));
+        tailMaterial.color.set(getColor('--forest-animal'));
+        stars.visible = document.documentElement.dataset.theme !== 'light';
+        requestFrame();
+      };
+      const resize = () => {
+        const { width, height } = host.getBoundingClientRect();
+        if (!width || !height) return;
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        requestFrame();
+      };
+      const onPointerMove = (event: PointerEvent) => {
+        if (event.target instanceof Element && event.target.closest('button, a')) return;
+        const rect = hero.getBoundingClientRect();
+        target.set(THREE.MathUtils.clamp((event.clientX - rect.left) / rect.width * 2 - 1, -1, 1), THREE.MathUtils.clamp((event.clientY - rect.top) / rect.height * 2 - 1, -1, 1));
+        if (motionReduced) pointer.copy(target);
+        requestFrame();
+      };
+      const resetView = () => { target.set(0, 0); if (motionReduced) pointer.copy(target); requestFrame(); };
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        const key = event.key.toLowerCase();
+        if (!['a', 'd', 'w', 's', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'home'].includes(key)) return;
+        event.preventDefault();
+        if (key === 'home') target.set(0, 0);
+        if (key === 'a' || key === 'arrowleft') target.x = Math.max(-1, target.x - 0.2);
+        if (key === 'd' || key === 'arrowright') target.x = Math.min(1, target.x + 0.2);
+        if (key === 'w' || key === 'arrowup') target.y = Math.max(-1, target.y - 0.2);
+        if (key === 's' || key === 'arrowdown') target.y = Math.min(1, target.y + 0.2);
+        if (motionReduced) pointer.copy(target);
+        requestFrame();
+      };
+      const onReducedMotion = () => { motionReduced = reducedMotion.matches; elapsed = Math.max(elapsed, 4); requestFrame(); };
+      const onVisibility = () => {
+        if (document.hidden) { cancelAnimationFrame(frame); frame = 0; }
+        else { lastTime = performance.now(); requestFrame(); }
+      };
+
+      function render(now: number) {
+        frame = 0;
+        if (disposed || !inView || document.hidden) return;
+        const delta = Math.min((now - lastTime) / 1000, 0.05);
+        lastTime = now;
+        if (!motionReduced) {
+          elapsed += delta;
+          pointer.lerp(target, 1 - Math.exp(-delta * 3.2));
+        }
+        const approach = Math.exp(-elapsed * 1.3);
+        const z = 24 + approach * 10 + Math.sin(elapsed * 0.1) * 0.7;
+        const x = trailCenter(24) - 1.5 + pointer.x * 1.2;
+        const y = groundHeight(x, z) + 5.2 + approach * 2 - pointer.y * 0.5;
+        camera.position.set(x, y, z);
+        const mobile = camera.aspect < 1;
+        lookAt.set(trailCenter(-48) - (mobile ? 0 : 11) + pointer.x * 9, 3.0 - pointer.y * 2.5, -48);
+        camera.lookAt(lookAt);
+        animateGrass(elapsed);
+        animateMouse(elapsed);
+        renderer.render(scene, camera);
+        if (!motionReduced) requestFrame();
+      }
+
+      const resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(host);
+      const visibilityObserver = new IntersectionObserver(([entry]) => {
+        inView = entry.isIntersecting;
+        if (!inView) { cancelAnimationFrame(frame); frame = 0; }
+        else { lastTime = performance.now(); requestFrame(); }
+      });
+      visibilityObserver.observe(host);
+      hero.addEventListener('pointermove', onPointerMove, { passive: true });
+      hero.addEventListener('pointerleave', resetView);
+      canvas.addEventListener('keydown', onKeyDown);
+      reducedMotion.addEventListener('change', onReducedMotion);
+      window.addEventListener('complexity:theme-change', updateTheme);
+      document.addEventListener('visibilitychange', onVisibility);
+      updateTheme();
+      resize();
+      host.classList.add('is-loaded');
+
+      return () => {
+        disposed = true;
+        cancelAnimationFrame(frame);
+        resizeObserver.disconnect();
+        visibilityObserver.disconnect();
+        hero.removeEventListener('pointermove', onPointerMove);
+        hero.removeEventListener('pointerleave', resetView);
+        canvas.removeEventListener('keydown', onKeyDown);
+        reducedMotion.removeEventListener('change', onReducedMotion);
+        window.removeEventListener('complexity:theme-change', updateTheme);
+        document.removeEventListener('visibilitychange', onVisibility);
+        [trunks, branches, grass, bushes, bushWire].forEach(mesh => mesh.dispose());
+        geometries.forEach(geometry => geometry.dispose());
+        materials.forEach(material => material.dispose());
+        renderer.dispose();
+      };
+    };
+
+    try {
+      const dispose = setupForest();
+      // Preserve the scene when the browser stores the page in its back cache.
+      window.addEventListener('pagehide', (event) => { if (!event.persisted) dispose(); });
+      if (import.meta.hot) import.meta.hot.dispose(dispose);
+    } catch (error) {
+      console.error('Unable to render the forest', error);
+      const loading = host.querySelector<HTMLElement>('[data-forest-loading]');
+      if (loading) loading.textContent = 'The forest needs a browser with WebGL enabled.';
+      canvas.removeAttribute('tabindex');
+    }
+  }
+</script>

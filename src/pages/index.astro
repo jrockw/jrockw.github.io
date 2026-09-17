@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ForestScene from '../components/ForestScene.astro';
+---
+<BaseLayout>
+  <section class="hero" aria-labelledby="welcome-heading">
+    <ForestScene />
+    <div class="hero-inner shell">
+      <div class="hero-copy">
+        <p class="eyebrow hero-eyebrow">Jacob Rockwell</p>
+        <h1 id="welcome-heading">Welcome to<br /><span>cyberspace.</span></h1>
+        <p class="hero-intro">I’m Jacob. I build products, explore systems, and write about what I learn along the way.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="/blog/">Explore the writing <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="/about/">A little about me <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

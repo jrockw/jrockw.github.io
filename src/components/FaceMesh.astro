@@ -1,0 +1,209 @@
+<div class="face-scene" data-face-scene>
+  <div class="face-viewport" data-face-viewport>
+    <canvas data-face-canvas aria-hidden="true"></canvas>
+    <p class="face-loading" data-face-loading role="status">Loading face…</p>
+  </div>
+  <div class="face-controls">
+    <span class="face-hint">Move cursor to look around</span>
+    <button class="face-status" type="button" data-face-speak aria-label="Play the welcome message" disabled>Play greeting</button>
+  </div>
+</div>
+
+<script>
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+  import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+  import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+
+  const host = document.querySelector<HTMLElement>('[data-face-scene]');
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-face-canvas]');
+  const viewport = document.querySelector<HTMLElement>('[data-face-viewport]');
+  const speakButton = document.querySelector<HTMLButtonElement>('[data-face-speak]');
+
+  if (host && canvas && viewport) {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(27, 1, 0.1, 100);
+    camera.position.z = 12;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+
+    const face = new THREE.Group();
+    scene.add(face);
+    let head: THREE.Mesh | undefined;
+    let speaking = false;
+    let speakingStart = 0;
+    let hasSpoken = false;
+
+    const setSpeakingState = (active: boolean) => {
+      speaking = active;
+      host.classList.toggle('is-speaking', active);
+      if (speakButton) {
+        speakButton.textContent = active
+          ? 'Speaking…'
+          : 'Replay greeting';
+      }
+    };
+
+    const speakWelcome = () => {
+      speakingStart = performance.now();
+      hasSpoken = true;
+      setSpeakingState(true);
+
+      const speech = window.speechSynthesis;
+      if (!speech) {
+        globalThis.setTimeout(() => setSpeakingState(false), 2400);
+        return;
+      }
+
+      speech.cancel();
+      const message = new SpeechSynthesisUtterance('Welcome to cyberspace');
+      message.rate = 0.78;
+      message.pitch = 0.72;
+      message.volume = 0.9;
+      message.onstart = () => {
+        speakingStart = performance.now();
+        setSpeakingState(true);
+      };
+      message.onend = () => setSpeakingState(false);
+      message.onerror = () => setSpeakingState(false);
+      speech.speak(message);
+    };
+
+    speakButton?.addEventListener('click', speakWelcome);
+    window.addEventListener('pointerdown', () => {
+      if (!hasSpoken) speakWelcome();
+    }, { once: true });
+
+    const theme = getComputedStyle(host);
+    const depthMaterial = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(theme.getPropertyValue('--ground').trim()),
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
+    });
+    const wireMaterial = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(theme.getPropertyValue('--face-wire').trim()),
+      transparent: true,
+      opacity: 0.72,
+      wireframe: true
+    });
+
+    const updateFaceTheme = () => {
+      const colors = getComputedStyle(host);
+      depthMaterial.color.set(colors.getPropertyValue('--ground').trim());
+      wireMaterial.color.set(colors.getPropertyValue('--face-wire').trim());
+    };
+    window.addEventListener('complexity:theme-change', updateFaceTheme);
+
+    const ktx2Loader = new KTX2Loader()
+      .setTranscoderPath('/assets/basis/')
+      .detectSupport(renderer);
+
+    new GLTFLoader()
+      .setKTX2Loader(ktx2Loader)
+      .setMeshoptDecoder(MeshoptDecoder)
+      .load('/assets/models/facecap.glb', (gltf) => {
+        const model = gltf.scene;
+        head = model.getObjectByName('mesh_2') as THREE.Mesh | undefined;
+
+        const meshes: THREE.Mesh[] = [];
+        model.traverse((object) => {
+          if ((object as THREE.Mesh).isMesh) meshes.push(object as THREE.Mesh);
+        });
+
+        for (const mesh of meshes) {
+          mesh.material = depthMaterial;
+
+          const overlay = new THREE.Mesh(mesh.geometry, wireMaterial);
+          overlay.morphTargetDictionary = mesh.morphTargetDictionary;
+          overlay.morphTargetInfluences = mesh.morphTargetInfluences;
+          overlay.frustumCulled = false;
+          mesh.add(overlay);
+        }
+
+        face.add(model);
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        model.position.sub(center);
+        face.position.y = -0.08;
+        face.scale.setScalar(5.4 / size.y);
+        host.classList.add('is-loaded');
+        if (speakButton) speakButton.disabled = false;
+        window.setTimeout(() => {
+          if (!hasSpoken && document.visibilityState === 'visible') speakWelcome();
+        }, 650);
+      }, undefined, (error) => {
+        console.error(error);
+        const loading = host.querySelector<HTMLElement>('[data-face-loading]');
+        if (loading) loading.textContent = 'Face unavailable. Please reload.';
+      });
+
+    const pointer = new THREE.Vector2();
+    const target = new THREE.Vector2();
+    const maxHeadYaw = THREE.MathUtils.degToRad(60);
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const onPointerMove = (event: PointerEvent) => {
+      const rect = viewport.getBoundingClientRect();
+      target.x = THREE.MathUtils.clamp(((event.clientX - rect.left) / rect.width - 0.5) * 2, -1, 1);
+      target.y = THREE.MathUtils.clamp(((event.clientY - rect.top) / rect.height - 0.5) * 2, -1, 1);
+    };
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    host.addEventListener('pointerleave', () => target.set(0, 0));
+
+    const resize = () => {
+      const { width, height } = viewport.getBoundingClientRect();
+      if (!width || !height) return;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    };
+    new ResizeObserver(resize).observe(viewport);
+    resize();
+
+    const render = (time = 0) => {
+      pointer.lerp(target, 0.055);
+
+      if (head?.morphTargetDictionary && head.morphTargetInfluences && !reducedMotion) {
+        const speechTime = (time - speakingStart) / 1000;
+        const syllableCenters = [0.14, 0.43, 0.82, 1.13, 1.46, 1.79];
+        const mouthOpen = speaking
+          ? Math.min(1, syllableCenters.reduce((amount, center, index) => {
+              const distance = (speechTime - center) / (index === 2 ? 0.105 : 0.14);
+              return amount + Math.exp(-(distance * distance)) * (index % 2 ? 0.76 : 0.94);
+            }, 0))
+          : 0;
+        const setMorph = (name: string, weight: number) => {
+          const index = head?.morphTargetDictionary?.[name];
+          if (index !== undefined && head?.morphTargetInfluences) {
+            head.morphTargetInfluences[index] = weight;
+          }
+        };
+
+        // The Face Cap asset includes named ARKit-style facial controls. Drive
+        // the four lip shapes directly and leave jawOpen at zero so the chin
+        // remains still while the mouth visibly articulates.
+        setMorph('mouthUpperUp_L', mouthOpen * 0.34);
+        setMorph('mouthUpperUp_R', mouthOpen * 0.34);
+        setMorph('mouthLowerDown_L', mouthOpen * 0.78);
+        setMorph('mouthLowerDown_R', mouthOpen * 0.78);
+        setMorph('mouthFunnel', mouthOpen * 0.08);
+        setMorph('jawOpen', 0);
+      }
+
+      if (!reducedMotion) {
+        const idleYaw = Math.sin(time * 0.00035) * 0.08;
+        const desiredYaw = THREE.MathUtils.clamp(pointer.x * maxHeadYaw + idleYaw, -maxHeadYaw, maxHeadYaw);
+        face.rotation.y += (desiredYaw - face.rotation.y) * 0.07;
+        face.rotation.x += ((pointer.y * 0.22) - face.rotation.x) * 0.07;
+        face.position.x = pointer.x * 0.16;
+      }
+      renderer.render(scene, camera);
+      requestAnimationFrame(render);
+    };
+    render();
+  }
+</script>
